@@ -1,10 +1,36 @@
 /**
+ * Extracts the Google Drive file ID from various URL formats.
+ * Returns null if the URL is not a recognized Drive URL.
+ */
+export function extractFileId(url: string): string | null {
+  if (!url) return null
+
+  const fileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/)
+  if (fileMatch) return fileMatch[1]
+
+  const lh3Match = url.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/)
+  if (lh3Match) return lh3Match[1]
+
+  const ucMatch = url.match(/drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/)
+  if (ucMatch) return ucMatch[1]
+
+  return null
+}
+
+/**
+ * Returns a Google Drive native preview URL for iframe embeds.
+ * No API call or auth required — loads directly from Google's CDN.
+ */
+export function drivePreviewUrl(url: string): string {
+  if (!url) return ''
+  const fileId = extractFileId(url)
+  if (!fileId) return url
+  return `https://drive.google.com/file/d/${fileId}/preview`
+}
+
+/**
  * Rewrites Google Drive URLs to use our authenticated proxy at /api/drive/[fileId].
- *
- * Handles these formats:
- * - https://drive.google.com/file/d/FILE_ID/view...
- * - https://lh3.googleusercontent.com/d/FILE_ID
- * - https://drive.google.com/uc?id=FILE_ID...
+ * Used for images (logo, photos) where an <img> tag needs a binary response.
  */
 export function rewriteDriveUrl(url: string): string {
   if (!url) return url

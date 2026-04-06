@@ -1,6 +1,8 @@
 import { google } from 'googleapis'
 import { NextResponse } from 'next/server'
 
+export const revalidate = 86400 // 24h cache for image proxy
+
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {

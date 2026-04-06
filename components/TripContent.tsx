@@ -7,11 +7,13 @@ import TripMap from './TripMap'
 import POIList from './POIList'
 import FlightCard from './FlightCard'
 import TravellersList from './TravellersList'
+import type { Document } from '@/lib/types'
 import {
   VoucherIcon, ShieldIcon, TicketIcon, DocumentIcon, PaperclipIcon,
-  PlaneIcon, LinkIcon, PrinterIcon,
+  PlaneIcon, PrinterIcon,
 } from './Icons'
 import PrintView from './PrintView'
+import DocumentViewer from './DocumentViewer'
 
 const TABS = ['Itinerary', 'Map', 'Documents', 'Flights', 'Travellers'] as const
 type Tab = typeof TABS[number]
@@ -25,6 +27,7 @@ type Props = {
 export default function TripContent({ bundle, tripIndex, totalTrips }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('Itinerary')
   const [showPrintView, setShowPrintView] = useState(false)
+  const [viewingDoc, setViewingDoc] = useState<Document | null>(null)
   const { agency, trip, days, segments, pois, documents, flights } = bundle
 
   const sortedDays = [...days].sort(
@@ -160,12 +163,10 @@ export default function TripContent({ bundle, tripIndex, totalTrips }: Props) {
               [...documents]
                 .sort((a, b) => Number(a.order) - Number(b.order))
                 .map((doc) => (
-                  <a
+                  <button
                     key={doc.doc_id}
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
+                    onClick={() => setViewingDoc(doc)}
+                    className="w-full flex items-center gap-3 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow text-left"
                   >
                     <span className="text-gray-500">
                       {doc.type === 'voucher' && <VoucherIcon className="w-6 h-6" />}
@@ -178,8 +179,10 @@ export default function TripContent({ bundle, tripIndex, totalTrips }: Props) {
                       <p className="font-medium truncate">{doc.name}</p>
                       <p className="text-xs text-gray-400 uppercase">{doc.type}</p>
                     </div>
-                    <LinkIcon className="w-5 h-5 text-gray-400" />
-                  </a>
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 ))
             )}
           </div>
@@ -209,6 +212,10 @@ export default function TripContent({ bundle, tripIndex, totalTrips }: Props) {
 
       {showPrintView && (
         <PrintView bundle={bundle} onClose={() => setShowPrintView(false)} />
+      )}
+
+      {viewingDoc && (
+        <DocumentViewer doc={viewingDoc} onClose={() => setViewingDoc(null)} />
       )}
     </div>
   )

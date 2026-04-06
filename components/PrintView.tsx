@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { TripBundle, Traveller, Day, Segment } from '@/lib/types'
+import { extractFileId } from '@/lib/drive'
 import {
-  XIcon, PrinterIcon, WhatsAppIcon, PlaneIcon, HotelIcon,
-  ActivityIcon, MealIcon, BusIcon, MapPinIcon, TimerIcon, TipIcon,
+  PlaneIcon, HotelIcon, ActivityIcon, MealIcon, BusIcon,
+  MapPinIcon, TimerIcon, TipIcon,
 } from './Icons'
+import OverlayView from './OverlayView'
 
 type Props = {
   bundle: TripBundle
@@ -57,21 +59,29 @@ function formatFlightDate(dateStr: string): string {
 
 export default function PrintView({ bundle, onClose }: Props) {
   const { agency, trip, days, segments, flights } = bundle
+  const printContentRef = useRef<HTMLDivElement>(null)
   const [travellers, setTravellers] = useState<Traveller[]>([])
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [cachedShareUrl, setCachedShareUrl] = useState<string | null>(null)
+  const [logoBlob, setLogoBlob] = useState<string | null>(null)
 
-  // Lock body scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
-  // Fetch travellers
   useEffect(() => {
     fetch(`/api/travellers?trip_id=${encodeURIComponent(trip.trip_id)}`)
       .then((r) => r.ok ? r.json() : [])
       .then(setTravellers)
       .catch(() => {})
   }, [trip.trip_id])
+
+  // Pre-fetch logo as blob for html2canvas CORS compatibility
+  useEffect(() => {
+    if (!agency.logo_url) return
+    const fileId = extractFileId(agency.logo_url)
+    const fetchUrl = fileId ? `/api/drive/${fileId}` : agency.logo_url
+    fetch(fetchUrl)
+      .then((r) => r.blob())
+      .then((blob) => setLogoBlob(URL.createObjectURL(blob)))
+      .catch(() => setLogoBlob(null))
+  }, [agency.logo_url])
 
   const sortedDays = [...days].sort(
     (a, b) => Number(a.day_number) - Number(b.day_number)
@@ -84,46 +94,94 @@ export default function PrintView({ bundle, onClose }: Props) {
 
   const sortedFlights = [...flights].sort((a, b) => a.date.localeCompare(b.date))
 
-  // WhatsApp share
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const waMessage = `${trip.title}\n${trip.traveler_name}\n${trip.start_date} → ${trip.end_date}\n\nView your full trip here:\n${appUrl}/trip/${trip.slug}`
-  const waUrl = `https://wa.me/?text=${encodeURIComponent(waMessage)}`
+
+  const openWhatsApp = (url: string) => {
+    const message = `${trip.title}\n${trip.traveler_name}\n${trip.start_date} → ${trip.end_date}\n\nFull itinerary:\n${url}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
+  }
+
+  const handleWhatsAppShare = async () => {
+    if (cachedShareUrl) {
+      openWhatsApp(cachedShareUrl)
+      return
+    }
+
+    if (!printContentRef.current) return
+    setIsGenerating(true)
+
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(printContentRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      })
+
+      const { jsPDF } = await import('jspdf')
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.92)
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+      const pageHeight = pdf.internal.pageSize.getHeight()
+
+      let heightLeft = pdfHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - pdfHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight)
+        heightLeft -= pageHeight
+      }
+
+      const pdfBase64 = pdf.output('datauristring').split(',')[1]
+
+      const res = await fetch('/api/drive/publish-itinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pdfBase64,
+          fileName: `${trip.slug}-itinerary-${trip.start_date}.pdf`,
+          tripId: trip.trip_id,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.shareUrl) {
+        setCachedShareUrl(data.shareUrl)
+        openWhatsApp(data.shareUrl)
+      } else {
+        throw new Error('No share URL returned')
+      }
+    } catch (err) {
+      console.error('PDF generation failed:', err)
+      openWhatsApp(`${appUrl}/trip/${trip.slug}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      {/* Top bar — hidden when printing */}
-      <div className="print-hidden sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={onClose}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-          title="Close"
-        >
-          <XIcon className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 text-sm font-medium"
-        >
-          <PrinterIcon className="w-4 h-4" /> Print
-        </button>
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600"
-          title="Share on WhatsApp"
-        >
-          <WhatsAppIcon className="w-5 h-5" />
-        </a>
-      </div>
-
-      {/* Printable content */}
-      <div id="print-view" className="max-w-[800px] mx-auto px-6 sm:px-10 py-8 print:p-0 print:max-w-full">
+    <OverlayView
+      title={trip.title}
+      onClose={onClose}
+      onWhatsApp={handleWhatsAppShare}
+      isWhatsAppLoading={isGenerating}
+      showPrint
+    >
+      <div ref={printContentRef} id="print-view" className="max-w-[800px] mx-auto px-6 sm:px-10 py-8 print:p-0 print:max-w-full">
         {/* Section 1 — Header */}
         <div className="flex items-start justify-between mb-4">
-          {agency.logo_url && (
+          {(logoBlob || agency.logo_url) && (
             <img
-              src={agency.logo_url}
+              src={logoBlob || agency.logo_url}
               alt={agency.name}
               className="h-12 w-auto object-contain"
             />
@@ -289,6 +347,6 @@ export default function PrintView({ bundle, onClose }: Props) {
           {agency.name} &middot; {appUrl}/trip/{trip.slug}
         </p>
       </div>
-    </div>
+    </OverlayView>
   )
 }
