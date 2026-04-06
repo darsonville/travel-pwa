@@ -16,7 +16,13 @@ import PrintView from './PrintView'
 const TABS = ['Itinerary', 'Map', 'Documents', 'Flights', 'Travellers'] as const
 type Tab = typeof TABS[number]
 
-export default function TripContent({ bundle }: { bundle: TripBundle }) {
+type Props = {
+  bundle: TripBundle
+  tripIndex?: number
+  totalTrips?: number
+}
+
+export default function TripContent({ bundle, tripIndex, totalTrips }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('Itinerary')
   const [showPrintView, setShowPrintView] = useState(false)
   const { agency, trip, days, segments, pois, documents, flights } = bundle
@@ -71,9 +77,16 @@ export default function TripContent({ bundle }: { bundle: TripBundle }) {
             Hello, {trip.traveler_name}
           </p>
           <h1 className="text-2xl sm:text-4xl font-bold mb-2">{trip.title}</h1>
-          <p className="text-sm opacity-90">
-            {trip.start_date} &mdash; {trip.end_date}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm opacity-90">
+              {trip.start_date} &mdash; {trip.end_date}
+            </p>
+            {totalTrips && totalTrips > 1 && tripIndex !== undefined && (
+              <span className="text-sm opacity-75 font-medium">
+                {tripIndex + 1}/{totalTrips}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

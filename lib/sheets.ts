@@ -115,9 +115,9 @@ export async function deleteRowById(sheetName: string, id: string): Promise<void
   })
 }
 
-// --- Trip bundle (read-only, original logic) ---
+// --- Trip bundles (read-only) ---
 
-export async function getTripBySlug(slug: string): Promise<TripBundle | null> {
+export async function getTripsBundlesBySlug(slug: string): Promise<TripBundle[]> {
   const sheets = getSheetsClient()
   const spreadsheetId = getSpreadsheetId()
   const ranges = TABS.map((tab) => `${tab}!A:Z`)
@@ -130,46 +130,55 @@ export async function getTripBySlug(slug: string): Promise<TripBundle | null> {
   const valueRanges = response.data.valueRanges || []
 
   const agencies = rowsToObjects<Agency>(valueRanges[0]?.values as string[][] || [])
-  const trips = rowsToObjects<Trip>(valueRanges[1]?.values as string[][] || [])
-  const days = rowsToObjects<Day>(valueRanges[2]?.values as string[][] || [])
-  const segments = rowsToObjects<Segment>(valueRanges[3]?.values as string[][] || [])
-  const pois = rowsToObjects<POI>(valueRanges[4]?.values as string[][] || [])
-  const documents = rowsToObjects<Document>(valueRanges[5]?.values as string[][] || [])
-  const flights = rowsToObjects<Flight>(valueRanges[6]?.values as string[][] || [])
+  const allTrips = rowsToObjects<Trip>(valueRanges[1]?.values as string[][] || [])
+  const allDays = rowsToObjects<Day>(valueRanges[2]?.values as string[][] || [])
+  const allSegments = rowsToObjects<Segment>(valueRanges[3]?.values as string[][] || [])
+  const allPois = rowsToObjects<POI>(valueRanges[4]?.values as string[][] || [])
+  const allDocuments = rowsToObjects<Document>(valueRanges[5]?.values as string[][] || [])
+  const allFlights = rowsToObjects<Flight>(valueRanges[6]?.values as string[][] || [])
 
-  const trip = trips.find((t) => t.slug === slug)
-  if (!trip || trip.active !== 'TRUE') return null
+  // Find all trips matching the slug (preserve sheet order)
+  const matchingTrips = allTrips.filter((t) => t.slug === slug && t.active === 'TRUE')
+  if (matchingTrips.length === 0) return []
 
-  const agency = agencies.find((a) => a.agency_id === trip.agency_id)
-  if (!agency) return null
+  return matchingTrips.map((trip) => {
+    const agency = agencies.find((a) => a.agency_id === trip.agency_id)
+    if (!agency) return null
 
-  const tripDays = days.filter((d) => d.trip_id === trip.trip_id)
-  const dayIds = new Set(tripDays.map((d) => d.day_id))
+    const tripDays = allDays.filter((d) => d.trip_id === trip.trip_id)
+    const dayIds = new Set(tripDays.map((d) => d.day_id))
 
-  const tripSegments = segments.filter((s) => dayIds.has(s.day_id))
-  const tripPois = pois.filter((p) => p.trip_id === trip.trip_id)
-  const tripDocuments = documents.filter((d) => d.trip_id === trip.trip_id)
-  const tripFlights = flights.filter((f) => f.trip_id === trip.trip_id)
+    const tripSegments = allSegments.filter((s) => dayIds.has(s.day_id))
+    const tripPois = allPois.filter((p) => p.trip_id === trip.trip_id)
+    const tripDocuments = allDocuments.filter((d) => d.trip_id === trip.trip_id)
+    const tripFlights = allFlights.filter((f) => f.trip_id === trip.trip_id)
 
-  // Rewrite Google Drive URLs to proxy through /api/drive/[fileId]
-  agency.logo_url = rewriteDriveUrl(agency.logo_url)
-  trip.cover_image_url = rewriteDriveUrl(trip.cover_image_url)
+    // Rewrite Google Drive URLs to proxy through /api/drive/[fileId]
+    agency.logo_url = rewriteDriveUrl(agency.logo_url)
+    trip.cover_image_url = rewriteDriveUrl(trip.cover_image_url)
 
-  for (const seg of tripSegments) {
-    seg.photo_urls = rewriteDriveUrls(seg.photo_urls)
-  }
+    for (const seg of tripSegments) {
+      seg.photo_urls = rewriteDriveUrls(seg.photo_urls)
+    }
 
-  for (const poi of tripPois) {
-    poi.photo_url = rewriteDriveUrl(poi.photo_url)
-  }
+    for (const poi of tripPois) {
+      poi.photo_url = rewriteDriveUrl(poi.photo_url)
+    }
 
-  return {
-    agency,
-    trip,
-    days: tripDays,
-    segments: tripSegments,
-    pois: tripPois,
-    documents: tripDocuments,
-    flights: tripFlights,
-  }
+    return {
+      agency,
+      trip,
+      days: tripDays,
+      segments: tripSegments,
+      pois: tripPois,
+      documents: tripDocuments,
+      flights: tripFlights,
+    }
+  }).filter((b): b is TripBundle => b !== null)
+}
+
+// Backwards-compatible single-trip helper
+export async function getTripBySlug(slug: string): Promise<TripBundle | null> {
+  const bundles = await getTripsBundlesBySlug(slug)
+  return bundles[0] || null
 }
