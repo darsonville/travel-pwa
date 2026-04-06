@@ -16,3 +16,22 @@ body {
     text-wrap: balance;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-view,
+  #print-view * {
+    visibility: visible;
+  }
+  #print-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .print-hidden {
+    display: none !important;
+  }
+}

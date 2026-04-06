@@ -9,14 +9,16 @@ import FlightCard from './FlightCard'
 import TravellersList from './TravellersList'
 import {
   VoucherIcon, ShieldIcon, TicketIcon, DocumentIcon, PaperclipIcon,
-  PlaneIcon, LinkIcon,
+  PlaneIcon, LinkIcon, PrinterIcon,
 } from './Icons'
+import PrintView from './PrintView'
 
 const TABS = ['Itinerary', 'Map', 'Documents', 'Flights', 'Travellers'] as const
 type Tab = typeof TABS[number]
 
 export default function TripContent({ bundle }: { bundle: TripBundle }) {
   const [activeTab, setActiveTab] = useState<Tab>('Itinerary')
+  const [showPrintView, setShowPrintView] = useState(false)
   const { agency, trip, days, segments, pois, documents, flights } = bundle
 
   const sortedDays = [...days].sort(
@@ -43,13 +45,11 @@ export default function TripContent({ bundle }: { bundle: TripBundle }) {
 
         {/* Agency Logo */}
         {agency.logo_url && (
-          <div className="absolute top-4 left-4">
-            <img
-              src={agency.logo_url}
-              alt={agency.name}
-              className="h-10 sm:h-12 object-contain bg-white/90 rounded-lg px-2 py-1"
-            />
-          </div>
+          <img
+            src={agency.logo_url}
+            alt={agency.name}
+            className="absolute top-4 left-4 h-10 sm:h-12 object-contain drop-shadow-lg"
+          />
         )}
 
         {/* Status Badge */}
@@ -105,6 +105,16 @@ export default function TripContent({ bundle }: { bundle: TripBundle }) {
       <div className="max-w-4xl mx-auto px-4 py-6">
         {activeTab === 'Itinerary' && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div />
+              <button
+                onClick={() => setShowPrintView(true)}
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                title="Printable version"
+              >
+                <PrinterIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
             {trip.description && (
               <p className="text-gray-600 mb-6">{trip.description}</p>
             )}
@@ -183,6 +193,10 @@ export default function TripContent({ bundle }: { bundle: TripBundle }) {
           <TravellersList tripId={trip.trip_id} />
         )}
       </div>
+
+      {showPrintView && (
+        <PrintView bundle={bundle} onClose={() => setShowPrintView(false)} />
+      )}
     </div>
   )
 }
