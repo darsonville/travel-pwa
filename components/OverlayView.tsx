@@ -32,7 +32,7 @@ export default function OverlayView({
       onWhatsApp()
     } else if (whatsappMessage) {
       window.open(
-        `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`,
+        `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappMessage)}`,
         '_blank'
       )
     }

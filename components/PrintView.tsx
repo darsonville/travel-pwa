@@ -98,7 +98,7 @@ export default function PrintView({ bundle, onClose }: Props) {
 
   const openWhatsApp = (url: string) => {
     const message = `${trip.title}\n${trip.traveler_name}\n${trip.start_date} → ${trip.end_date}\n\nFull itinerary:\n${url}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   const handleWhatsAppShare = async () => {
